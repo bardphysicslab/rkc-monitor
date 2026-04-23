@@ -106,6 +106,10 @@
         margin-bottom: 14px;
       }
 
+      .status.bad {
+        color: #ff7b7b;
+      }
+
       .note {
         color: var(--muted);
         font-size: 14px;
@@ -190,10 +194,10 @@
 
       <div class="grid">
         <div class="card">
-          <div class="kicker">Example Instrument</div>
-          <h2>Example Instrument</h2>
+          <div class="kicker">ESP32 Bard Box Node</div>
+          <h2>Cold Room Monitor</h2>
           <div id="health-status" class="status">App healthy</div>
-          <div class="note">No real hardware connected. This template is serving example normalized readings so a new deployment starts from a working baseline.</div>
+          <div class="note">RKC-Monitor reads a Bard Box ESP32 node over Wi-Fi/TCP and displays the latest normalized temperature and door-state values.</div>
 
           <div class="values">
             <div class="value">
@@ -201,12 +205,12 @@
               <div class="value-number"><span id="temp_c">—</span><span class="value-unit">°C</span></div>
             </div>
             <div class="value">
-              <div class="value-label">RH</div>
-              <div class="value-number"><span id="rh_pct">—</span><span class="value-unit">%</span></div>
+              <div class="value-label">Door Open</div>
+              <div class="value-number"><span id="door_open">—</span></div>
             </div>
             <div class="value">
-              <div class="value-label">Pressure</div>
-              <div class="value-number"><span id="press_pa">—</span><span class="value-unit">Pa</span></div>
+              <div class="value-label">Door Alarm</div>
+              <div class="value-number"><span id="door_alarm">—</span></div>
             </div>
           </div>
         </div>
@@ -218,6 +222,8 @@
             <div class="row"><span>App ID</span><span id="app_id">{{ app_id }}</span></div>
             <div class="row"><span>Mode</span><span id="app_mode">sensor_monitor</span></div>
             <div class="row"><span>Drivers</span><span id="driver_count">0</span></div>
+            <div class="row"><span>Node UID</span><span id="node_uid">—</span></div>
+            <div class="row"><span>Node Host</span><span id="node_host">—</span></div>
             <div class="row"><span>Time Status</span><span id="time_status">system</span></div>
           </div>
         </div>
@@ -235,6 +241,16 @@
           return;
         }
         el.textContent = digits === null ? String(value) : Number(value).toFixed(digits);
+      }
+
+      function showBool(id, value, trueLabel, falseLabel) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        if (value === null || value === undefined) {
+          el.textContent = "—";
+          return;
+        }
+        el.textContent = value ? trueLabel : falseLabel;
       }
 
       async function refreshTime() {
@@ -258,7 +274,12 @@
         document.getElementById("app_id").textContent = info.app_id || "—";
         document.getElementById("app_mode").textContent = info.mode || "—";
         document.getElementById("driver_count").textContent = String(drivers.drivers?.length ?? 0);
+        const driverInfo = (drivers.drivers || [])[0]?.info || {};
+        const infoRaw = driverInfo.info_raw || {};
+        document.getElementById("node_uid").textContent = driverInfo.uid || "—";
+        document.getElementById("node_host").textContent = infoRaw.host || "—";
         document.getElementById("health-status").textContent = health.ok ? "App healthy" : "App degraded";
+        document.getElementById("health-status").className = health.ok ? "status" : "status bad";
       }
 
       async function refreshReadings() {
@@ -267,8 +288,18 @@
         const reading = (j.readings || [])[0] || {};
         const data = reading.data || {};
         showValue("temp_c", data.temp_c, 2);
-        showValue("rh_pct", data.rh_pct, 2);
-        showValue("press_pa", data.press_pa, 0);
+        showBool("door_open", data.door_open, "Open", "Closed");
+        showBool("door_alarm", data.door_alarm, "Alarm", "Normal");
+        const statusEl = document.getElementById("health-status");
+        if (statusEl) {
+          if (reading.status === "ok") {
+            statusEl.textContent = "Node reachable";
+            statusEl.className = "status";
+          } else {
+            statusEl.textContent = "Node unavailable";
+            statusEl.className = "status bad";
+          }
+        }
       }
 
       async function tick() {
@@ -284,4 +315,3 @@
     </script>
   </body>
 </html>
-

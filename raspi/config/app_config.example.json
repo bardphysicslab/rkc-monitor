@@ -1,14 +1,17 @@
 {
-  "app_id": "bb-example-monitor",
+  "app_id": "bb-rkc-monitor",
   "mode": "sensor_monitor",
   "poll_interval_ms": 1000,
-  "title": "Example Deployment Monitor",
+  "title": "RKC-Monitor",
   "drivers": [
     {
-      "driver": "example",
-      "uid": "bb-0000",
-      "config": {}
+      "driver": "esp32_door_temp",
+      "uid": "bb-0004",
+      "config": {
+        "host": "192.168.1.50",
+        "port": 1234,
+        "timeout_s": 2.0
+      }
     }
   ]
 }
-

@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from raspi.drivers.example_driver import ExampleDriver
+from raspi.drivers.esp32_door_temp_driver import Esp32DoorTempDriver
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -17,7 +17,7 @@ STATIC_DIR = BASE_DIR / "static"
 TEMPLATES_DIR = BASE_DIR / "templates"
 DEFAULT_CONFIG_PATH = BASE_DIR / "config" / "app_config.example.json"
 
-app = FastAPI(title="Bard Box Project Template")
+app = FastAPI(title="RKC-Monitor")
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
@@ -46,10 +46,20 @@ def load_drivers(config: Dict[str, Any]) -> List[Any]:
         uid = entry.get("uid", "bb-0000")
         driver_config = entry.get("config", {})
 
-        if driver_name == "example":
-            loaded.append(ExampleDriver(uid=uid, config=driver_config))
+        if driver_name == "esp32_door_temp":
+            host = driver_config.get("host")
+            if not host:
+                raise ValueError("esp32_door_temp driver requires config.host")
+            loaded.append(
+                Esp32DoorTempDriver(
+                    uid=uid,
+                    host=host,
+                    port=int(driver_config.get("port", 1234)),
+                    timeout_s=float(driver_config.get("timeout_s", 2.0)),
+                )
+            )
         else:
-            raise ValueError(f"Unsupported driver in template: {driver_name}")
+            raise ValueError(f"Unsupported driver in RKC-Monitor: {driver_name}")
     return loaded
 
 
@@ -66,7 +76,29 @@ def time_status() -> Dict[str, Any]:
 
 
 def latest_readings() -> List[Dict[str, Any]]:
-    return [driver.get_reading() for driver in DRIVERS]
+    readings = []
+    for driver in DRIVERS:
+        try:
+            readings.append(driver.get_reading())
+        except Exception as exc:
+            uid = getattr(driver, "uid", "unknown")
+            readings.append(
+                {
+                    "uid": uid,
+                    "timestamp": utc_now().strftime("%Y-%m-%dT%H:%M:%SZ"),
+                    "status": "error",
+                    "data": {
+                        "temp_c": None,
+                        "door_open": None,
+                        "door_alarm": None,
+                    },
+                    "extended": {
+                        "error": str(exc),
+                    },
+                    "raw": None,
+                }
+            )
+    return readings
 
 
 @app.get("/")
@@ -75,8 +107,8 @@ def dashboard(request: Request):
         "index.html",
         {
             "request": request,
-            "title": APP_CONFIG.get("title", "Example Deployment Monitor"),
-            "app_id": APP_CONFIG.get("app_id", "bb-example-monitor"),
+            "title": APP_CONFIG.get("title", "RKC-Monitor"),
+            "app_id": APP_CONFIG.get("app_id", "bb-rkc-monitor"),
             "poll_interval_ms": APP_CONFIG.get("poll_interval_ms", 1000),
         },
     )
@@ -101,8 +133,8 @@ def get_time():
 def get_app_info():
     return JSONResponse(
         {
-            "app_id": APP_CONFIG.get("app_id", "bb-example-monitor"),
-            "title": APP_CONFIG.get("title", "Example Deployment Monitor"),
+            "app_id": APP_CONFIG.get("app_id", "bb-rkc-monitor"),
+            "title": APP_CONFIG.get("title", "RKC-Monitor"),
             "mode": APP_CONFIG.get("mode", "sensor_monitor"),
             "driver_count": len(DRIVERS),
         }
@@ -111,12 +143,15 @@ def get_app_info():
 
 @app.get("/app/health")
 def get_app_health():
+    readings = latest_readings()
+    degraded = any(reading.get("status") != "ok" for reading in readings)
     return JSONResponse(
         {
-            "ok": True,
-            "status": "ok",
+            "ok": not degraded,
+            "status": "ok" if not degraded else "degraded",
             "time_status": time_status(),
             "driver_count": len(DRIVERS),
+            "latest_readings": readings,
         }
     )
 
@@ -125,9 +160,20 @@ def get_app_health():
 def get_drivers():
     payload = []
     for driver in DRIVERS:
+        try:
+            info = driver.get_info()
+        except Exception as exc:
+            info = {
+                "uid": getattr(driver, "uid", "unknown"),
+                "source_type": "unknown",
+                "transport": "tcp",
+                "protocol": "bardbox",
+                "firmware": None,
+                "error": str(exc),
+            }
         payload.append(
             {
-                "info": driver.get_info(),
+                "info": info,
                 "capabilities": driver.get_capabilities(),
             }
         )
@@ -137,4 +183,3 @@ def get_drivers():
 @app.get("/readings/latest")
 def get_latest_readings():
     return JSONResponse({"readings": latest_readings()})
-

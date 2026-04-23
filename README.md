@@ -1,41 +1,68 @@
-# bardbox-project-template
+# RKC-Monitor
 
-`bardbox-project-template` is the standard starter repo for new Bard Box deployments.
+`RKC-Monitor` is a Bard Box deployment for an ESP32 Wi-Fi node that serves fridge temperature and door state over TCP.
 
-It is a deployment template: a small, runnable Pi app with an example driver, a minimal dashboard, starter scripts, and example config. It is meant to be copied and customized for a specific installation.
+It keeps the Bard Box architecture from the template:
+
+- deployment-specific config
+- Pi app orchestration in `raspi/main.py`
+- hardware/protocol handling inside a driver
+- normalized readings returned to the app and UI
 
 ## What This Repo Is
 
-- A starter template for new Bard Box deployments
-- A Pi app skeleton that already runs with example data
-- A clean place to swap in real drivers, config, and deployment identity
+- A real Bard Box deployment repo
+- A Raspberry Pi monitor for an ESP32 Bard Box TCP node
+- A clean deployment-specific app built on the Bard Box standards
 
 ## What This Repo Is Not
 
 - Not the canonical Bard Box standards/spec repo
-- Not the place to define protocol or architecture standards
-- Not a hardware-specific project
+- Not a generic starter template anymore
 
 Use the separate `bardbox` repo as the standards and reference source for protocol, reading format, driver boundaries, runtime structure, and UI conventions.
 
-## Expected Workflow
-
-1. Copy or clone this template for a new deployment.
-2. Change the deployment title and `app_id`.
-3. Replace the example driver with one or more real drivers.
-4. Add real deployment config.
-5. Run locally, then deploy to the Raspberry Pi.
-
-## Quick Start
+## Local Run
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
+python3 -m venv raspi/venv
+source raspi/venv/bin/activate
 pip install -r requirements.txt
-uvicorn raspi.main:app --reload --app-dir .
+uvicorn raspi.main:app --reload
 ```
 
 Then open [http://127.0.0.1:8000](http://127.0.0.1:8000).
+
+Run Git commands and app launch from repo root.
+
+## Device Contract
+
+The ESP32 node is expected to listen on TCP port `1234` and answer Bard Box-style text commands:
+
+- `INFO`
+- `PING`
+- `STATUS`
+- `HEADER`
+- `READ`
+- `START`
+- `STOP`
+
+Current header:
+
+```text
+HDR,v1,temp_c,door_open,door_alarm
+```
+
+Current sample:
+
+```text
+DAT,<temp_c>,<door_open>,<door_alarm>
+```
+
+Door values are interpreted as:
+
+- `1` = `true`
+- `0` = `false`
 
 ## Repo Layout
 
@@ -49,32 +76,10 @@ bardbox-project-template/
   data/        runtime data directory
 ```
 
-## First Things To Customize
+## Config
 
-1. `raspi/config/app_config.example.json`
-   Change `app_id`, `title`, mode, and driver list.
-2. `raspi/drivers/example_driver.py`
-   Replace the example driver with a real one.
-3. `raspi/main.py`
-   Wire in your real drivers and deployment-specific routes only where needed.
-4. `raspi/templates/index.html`
-   Adjust the dashboard content for your deployment.
-5. `raspi/static/Bard-Web-Logos/bard-logo-red.png`
-   Confirm the approved Bard branding asset placement for your deployment.
+Set the ESP32 node IP in:
 
-## Standards Reference
+- `raspi/config/app_config.example.json`
 
-This template should be kept aligned with the Bard Box standards repo, especially for:
-
-- Pi runtime structure
-- driver separation
-- normalized reading format
-- config-driven deployment
-- monitor header/layout conventions
-
-## Local Notes
-
-- The example app serves fake but realistic normalized readings.
-- No real hardware is required to boot the template.
-- The header already includes a Bard logo, a human-readable deployment title, and a live clock.
-
+or point `BARDBOX_APP_CONFIG` at a deployment-specific config file.

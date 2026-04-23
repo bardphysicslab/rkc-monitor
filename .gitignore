@@ -1,4 +1,5 @@
 .venv/
+raspi/venv/
 __pycache__/
 *.pyc
 *.pyo
@@ -6,4 +7,3 @@ __pycache__/
 .env
 data/*
 !data/.gitkeep
-
