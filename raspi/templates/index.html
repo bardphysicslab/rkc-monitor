@@ -13,6 +13,7 @@
         --muted: #a7a7a7;
         --accent: #58a6ff;
         --ok: #52d273;
+        --bard-red: #c9232d;
       }
 
       * {
@@ -141,6 +142,22 @@
         font-weight: 700;
       }
 
+      .alarm-active {
+        animation: alarm-flash 1s steps(2, start) infinite;
+      }
+
+      @keyframes alarm-flash {
+        0% {
+          color: var(--bard-red);
+        }
+        50% {
+          color: var(--text);
+        }
+        100% {
+          color: var(--bard-red);
+        }
+      }
+
       .value-unit {
         font-size: 14px;
         color: var(--muted);
@@ -253,6 +270,23 @@
         el.textContent = value ? trueLabel : falseLabel;
       }
 
+      function setAlarmState(value) {
+        const el = document.getElementById("door_alarm");
+        if (!el) return;
+        if (value === null || value === undefined) {
+          el.textContent = "—";
+          el.classList.remove("alarm-active");
+          return;
+        }
+        if (value === true) {
+          el.textContent = "Alarm";
+          el.classList.add("alarm-active");
+          return;
+        }
+        el.textContent = "Normal";
+        el.classList.remove("alarm-active");
+      }
+
       async function refreshTime() {
         const r = await fetch("/time");
         const j = await r.json();
@@ -289,7 +323,7 @@
         const data = reading.data || {};
         showValue("temp_c", data.temp_c, 2);
         showBool("door_open", data.door_open, "Open", "Closed");
-        showBool("door_alarm", data.door_alarm, "Alarm", "Normal");
+        setAlarmState(data.door_alarm);
         const statusEl = document.getElementById("health-status");
         if (statusEl) {
           if (reading.status === "ok") {
