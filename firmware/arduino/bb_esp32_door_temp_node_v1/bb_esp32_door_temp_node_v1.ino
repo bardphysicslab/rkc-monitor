@@ -6,9 +6,10 @@
 
 #include <WiFi.h>
 #include <Adafruit_MAX31865.h>
+#include "secrets.h"
 
-const char* WIFI_SSID = "BardFiddyOhm";
-const char* WIFI_PASS = "M4k3r$p4c3";
+const char* WIFI_SSID = WIFI_SSID_VALUE;
+const char* WIFI_PASS = WIFI_PASS_VALUE;
 
 #define DEVICE_UID "bb-0004"
 #define FW_VERSION "1.0"
@@ -39,7 +40,7 @@ unsigned long doorOpenedAt = 0;
 bool doorAlarm = false;
 
 void updateDoorState() {
-  bool rawOpen = (digitalRead(DOOR_PIN) == HIGH);  // open = HIGH, closed = LOW
+  bool rawOpen = (digitalRead(DOOR_PIN) == LOW);  // open = LOW, closed = HIGH
 
   if (rawOpen) {
     openCount++;
@@ -170,24 +171,40 @@ void setup() {
   Serial.println("=== WiFi + MAX31865 + Door Start ===");
 
   pinMode(DOOR_PIN, INPUT_PULLUP);
-  thermo.begin(MAX31865_2WIRE);
 
   WiFi.mode(WIFI_STA);
   WiFi.begin(WIFI_SSID, WIFI_PASS);
 
-  while (WiFi.status() != WL_CONNECTED) {
+  Serial.print("Connecting to WiFi");
+
+  int attempts = 0;
+  while (WiFi.status() != WL_CONNECTED && attempts < 40) {
     delay(500);
     Serial.print(".");
+    attempts++;
   }
 
   Serial.println();
+
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.print("WiFi FAILED, status = ");
+    Serial.println(WiFi.status());
+    return;
+  }
+
   Serial.println("=== CONNECTED ===");
   Serial.print("IP: ");
   Serial.println(WiFi.localIP());
 
+  Serial.println("Starting MAX31865...");
+  thermo.begin(MAX31865_2WIRE);
+  Serial.println("MAX31865 started");
+
   server.begin();
   server.setNoDelay(true);
   Serial.println("Server started");
+
+
 }
 
 void loop() {

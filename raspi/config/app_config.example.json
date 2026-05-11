@@ -1,17 +1,18 @@
 {
-  "app_id": "bb-rkc-monitor",
+  "app": {
+    "title": "RKC Monitor",
+    "app_id": "bb-rkc-monitor"
+  },
   "mode": "sensor_monitor",
   "poll_interval_ms": 5000,
-  "title": "RKC-Monitor",
-  "drivers": [
+  "nodes": [
     {
-      "driver": "esp32_door_temp",
-      "uid": "bb-0004",
-      "config": {
-        "host": "192.168.50.98",
-        "port": 1234,
-        "timeout_s": 2.0
-      }
+      "uid": "rkc-01",
+      "name": "Freezer 1",
+      "location": "RKC / test bench",
+      "host": "192.168.8.238",
+      "port": 1234,
+      "timeout_s": 1.0
     }
   ]
 }

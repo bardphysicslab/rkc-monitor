@@ -7,3 +7,5 @@ __pycache__/
 .env
 data/*
 !data/.gitkeep
+raspi/config/app_config.json
+firmware/arduino/bb_esp32_door_temp_node_v1/secrets.h

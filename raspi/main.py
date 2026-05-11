@@ -15,7 +15,8 @@ from raspi.drivers.esp32_door_temp_driver import Esp32DoorTempDriver
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
 TEMPLATES_DIR = BASE_DIR / "templates"
-DEFAULT_CONFIG_PATH = BASE_DIR / "config" / "app_config.example.json"
+DEFAULT_CONFIG_PATH = BASE_DIR / "config" / "app_config.json"
+EXAMPLE_CONFIG_PATH = BASE_DIR / "config" / "app_config.example.json"
 
 app = FastAPI(title="RKC-Monitor")
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
@@ -32,34 +33,49 @@ def local_now() -> datetime:
 
 def load_config() -> Dict[str, Any]:
     config_path = Path(os.environ.get("BARDBOX_APP_CONFIG", DEFAULT_CONFIG_PATH))
+    if not config_path.exists() and config_path == DEFAULT_CONFIG_PATH:
+        config_path = EXAMPLE_CONFIG_PATH
     with config_path.open("r", encoding="utf-8") as handle:
         return json.load(handle)
 
 
 APP_CONFIG = load_config()
+APP_SETTINGS = APP_CONFIG.get("app", APP_CONFIG)
 
 
 def load_drivers(config: Dict[str, Any]) -> List[Any]:
     loaded = []
-    for entry in config.get("drivers", []):
-        driver_name = entry.get("driver")
-        uid = entry.get("uid", "bb-0000")
-        driver_config = entry.get("config", {})
+    nodes = config.get("nodes", [])
 
-        if driver_name == "esp32_door_temp":
-            host = driver_config.get("host")
-            if not host:
-                raise ValueError("esp32_door_temp driver requires config.host")
-            loaded.append(
-                Esp32DoorTempDriver(
-                    uid=uid,
-                    host=host,
-                    port=int(driver_config.get("port", 1234)),
-                    timeout_s=float(driver_config.get("timeout_s", 2.0)),
-                )
+    if not nodes:
+        for entry in config.get("drivers", []):
+            driver_config = entry.get("config", {})
+            nodes.append(
+                {
+                    "uid": entry.get("uid", "bb-0000"),
+                    "host": driver_config.get("host"),
+                    "port": driver_config.get("port", 1234),
+                    "timeout_s": driver_config.get("timeout_s", 1.0),
+                }
             )
-        else:
-            raise ValueError(f"Unsupported driver in RKC-Monitor: {driver_name}")
+
+    for node in nodes:
+        uid = node.get("uid", "bb-0000")
+        host = node.get("host")
+        if not host:
+            raise ValueError(f"node {uid} requires host")
+
+        loaded.append(
+            Esp32DoorTempDriver(
+                uid=uid,
+                name=node.get("name"),
+                location=node.get("location"),
+                host=host,
+                port=int(node.get("port", 1234)),
+                timeout_s=float(node.get("timeout_s", 1.0)),
+            )
+        )
+
     return loaded
 
 
@@ -93,7 +109,13 @@ def latest_readings() -> List[Dict[str, Any]]:
                         "door_alarm": None,
                     },
                     "extended": {
-                        "error": str(exc),
+                        "uid": uid,
+                        "name": getattr(driver, "name", uid),
+                        "location": getattr(driver, "location", None),
+                        "host": getattr(driver, "host", None),
+                        "port": getattr(driver, "port", None),
+                        "error": "driver_exception",
+                        "detail": str(exc),
                     },
                     "raw": None,
                 }
@@ -107,9 +129,12 @@ def dashboard(request: Request):
         "index.html",
         {
             "request": request,
-            "title": APP_CONFIG.get("title", "RKC-Monitor"),
-            "app_id": APP_CONFIG.get("app_id", "bb-rkc-monitor"),
-            "poll_interval_ms": APP_CONFIG.get("poll_interval_ms", 1000),
+            "title": APP_SETTINGS.get("title", "RKC Monitor"),
+            "app_id": APP_SETTINGS.get("app_id", "bb-rkc-monitor"),
+            "poll_interval_ms": APP_CONFIG.get(
+                "poll_interval_ms",
+                APP_SETTINGS.get("poll_interval_ms", 5000),
+            ),
         },
     )
 
@@ -133,9 +158,10 @@ def get_time():
 def get_app_info():
     return JSONResponse(
         {
-            "app_id": APP_CONFIG.get("app_id", "bb-rkc-monitor"),
-            "title": APP_CONFIG.get("title", "RKC-Monitor"),
-            "mode": APP_CONFIG.get("mode", "sensor_monitor"),
+            "app_id": APP_SETTINGS.get("app_id", "bb-rkc-monitor"),
+            "title": APP_SETTINGS.get("title", "RKC Monitor"),
+            "mode": APP_CONFIG.get("mode", APP_SETTINGS.get("mode", "sensor_monitor")),
+            "node_count": len(DRIVERS),
             "driver_count": len(DRIVERS),
         }
     )
@@ -150,6 +176,7 @@ def get_app_health():
             "ok": not degraded,
             "status": "ok" if not degraded else "degraded",
             "time_status": time_status(),
+            "node_count": len(DRIVERS),
             "driver_count": len(DRIVERS),
             "latest_readings": readings,
         }
