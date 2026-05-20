@@ -250,7 +250,7 @@
 
       <div class="summary">
         <div><strong id="app_id">{{ app_id }}</strong></div>
-        <div><span id="node_count">0</span> nodes</div>
+        <div><span id="node_count">0 nodes</span></div>
         <div>Time: <span id="time_status">system</span></div>
       </div>
 
@@ -270,6 +270,15 @@
         return value ? "Open" : "Closed";
       }
 
+      function formatTempLimit(value) {
+        if (value === null || value === undefined) return "—";
+        return `${Number(value).toFixed(0)}°C`;
+      }
+
+      function formatRange(meta) {
+        return `${formatTempLimit(meta.minTempC)} to ${formatTempLimit(meta.maxTempC)}`;
+      }
+
       function formatTimestamp(value) {
         if (!value) return "—";
         const parsed = new Date(value);
@@ -285,6 +294,8 @@
           location: extended.location || "—",
           host: extended.host || "—",
           port: extended.port ?? "—",
+          minTempC: extended.min_temp_c,
+          maxTempC: extended.max_temp_c,
         };
       }
 
@@ -300,7 +311,7 @@
           return { label: "Sensor error", className: "warn" };
         }
 
-        if (data.door_alarm === true) {
+        if (data.door_alarm === true || data.temp_alarm === true) {
           return { label: "ALARM", className: "alarm" };
         }
 
@@ -321,8 +332,9 @@
           const data = reading.data || {};
           const extended = reading.extended || {};
           const status = getStatus(reading);
+          const hasAlarm = data.door_alarm === true || data.temp_alarm === true;
           const card = document.createElement("article");
-          card.className = `node-card ${data.door_alarm === true ? "alarm" : ""}`;
+          card.className = `node-card ${hasAlarm ? "alarm" : ""}`;
           card.dataset.uid = meta.uid;
           card.dataset.error = extended.error || "";
           card.dataset.nodeReachable =
@@ -331,7 +343,7 @@
 
           const temp = formatTemp(data.temp_c);
           const tempUnit = temp === "—" ? "" : '<span class="metric-unit">°C</span>';
-          const alarmClass = data.door_alarm === true ? " alarm-active" : "";
+          const alarmClass = hasAlarm ? " alarm-active" : "";
 
           card.innerHTML = `
             <div class="node-head">
@@ -351,6 +363,7 @@
                 <div class="metric-value${alarmClass}">${formatDoor(data.door_open)}</div>
               </div>
             </div>
+            <div class="last-seen">Range: ${formatRange(meta)}</div>
             <div class="last-seen">Last seen: ${formatTimestamp(reading.timestamp)}</div>
           `;
           card.querySelector(".node-name").textContent = meta.name;
@@ -372,7 +385,9 @@
         const r = await fetch("/app/info");
         const info = await r.json();
         document.getElementById("app_id").textContent = info.app_id || "—";
-        document.getElementById("node_count").textContent = String(info.node_count ?? 0);
+        const totalNodes = info.total_nodes ?? info.node_count ?? 0;
+        const enabledNodes = info.enabled_nodes ?? totalNodes;
+        document.getElementById("node_count").textContent = `${totalNodes} total / ${enabledNodes} enabled`;
       }
 
       async function refreshReadings() {

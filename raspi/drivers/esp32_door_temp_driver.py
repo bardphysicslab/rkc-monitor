@@ -23,13 +23,21 @@ class Esp32DoorTempDriver:
         timeout_s: float = 1.0,
         name: Optional[str] = None,
         location: Optional[str] = None,
+        instance: Optional[int] = None,
+        enabled: bool = True,
+        min_temp_c: Optional[float] = None,
+        max_temp_c: Optional[float] = None,
     ):
         self.uid = uid
         self.name = name or uid
         self.location = location
+        self.instance = instance
+        self.enabled = enabled
         self.host = host
         self.port = port
         self.timeout_s = timeout_s
+        self.min_temp_c = min_temp_c
+        self.max_temp_c = max_temp_c
         self._lock = threading.Lock()
         self._cached_info: Optional[Dict[str, Any]] = None
         self._cached_header: Optional[List[str]] = None
@@ -55,6 +63,8 @@ class Esp32DoorTempDriver:
             "uid": info.get("uid", self.uid),
             "name": self.name,
             "location": self.location,
+            "instance": self.instance,
+            "enabled": self.enabled,
             "source_type": "esp32_door_temp_node",
             "transport": "tcp",
             "protocol": "bardbox",
@@ -232,8 +242,12 @@ class Esp32DoorTempDriver:
             "uid": self.uid,
             "name": self.name,
             "location": self.location,
+            "instance": self.instance,
+            "enabled": self.enabled,
             "host": self.host,
             "port": self.port,
+            "min_temp_c": self.min_temp_c,
+            "max_temp_c": self.max_temp_c,
         }
 
     def _esp32_error_reading(self, raw_error: str) -> dict:

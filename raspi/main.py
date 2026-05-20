@@ -43,21 +43,33 @@ APP_CONFIG = load_config()
 APP_SETTINGS = APP_CONFIG.get("app", APP_CONFIG)
 
 
-def load_drivers(config: Dict[str, Any]) -> List[Any]:
-    loaded = []
+def configured_nodes(config: Dict[str, Any]) -> List[Dict[str, Any]]:
     nodes = config.get("nodes", [])
 
     if not nodes:
+        nodes = []
         for entry in config.get("drivers", []):
             driver_config = entry.get("config", {})
             nodes.append(
                 {
+                    "instance": len(nodes) + 1,
+                    "enabled": True,
                     "uid": entry.get("uid", "bb-0000"),
                     "host": driver_config.get("host"),
                     "port": driver_config.get("port", 1234),
                     "timeout_s": driver_config.get("timeout_s", 1.0),
                 }
             )
+
+    return list(nodes)
+
+
+CONFIGURED_NODES = configured_nodes(APP_CONFIG)
+ENABLED_NODES = [node for node in CONFIGURED_NODES if node.get("enabled", True)]
+
+
+def load_drivers(nodes: List[Dict[str, Any]]) -> List[Any]:
+    loaded = []
 
     for node in nodes:
         uid = node.get("uid", "bb-0000")
@@ -70,16 +82,20 @@ def load_drivers(config: Dict[str, Any]) -> List[Any]:
                 uid=uid,
                 name=node.get("name"),
                 location=node.get("location"),
+                instance=node.get("instance"),
+                enabled=bool(node.get("enabled", True)),
                 host=host,
                 port=int(node.get("port", 1234)),
                 timeout_s=float(node.get("timeout_s", 1.0)),
+                min_temp_c=node.get("min_temp_c"),
+                max_temp_c=node.get("max_temp_c"),
             )
         )
 
     return loaded
 
 
-DRIVERS = load_drivers(APP_CONFIG)
+DRIVERS = load_drivers(ENABLED_NODES)
 
 
 def time_status() -> Dict[str, Any]:
@@ -112,8 +128,12 @@ def latest_readings() -> List[Dict[str, Any]]:
                         "uid": uid,
                         "name": getattr(driver, "name", uid),
                         "location": getattr(driver, "location", None),
+                        "instance": getattr(driver, "instance", None),
+                        "enabled": getattr(driver, "enabled", True),
                         "host": getattr(driver, "host", None),
                         "port": getattr(driver, "port", None),
+                        "min_temp_c": getattr(driver, "min_temp_c", None),
+                        "max_temp_c": getattr(driver, "max_temp_c", None),
                         "error": "driver_exception",
                         "detail": str(exc),
                     },
@@ -161,7 +181,10 @@ def get_app_info():
             "app_id": APP_SETTINGS.get("app_id", "bb-rkc-monitor"),
             "title": APP_SETTINGS.get("title", "RKC Monitor"),
             "mode": APP_CONFIG.get("mode", APP_SETTINGS.get("mode", "sensor_monitor")),
-            "node_count": len(DRIVERS),
+            "node_count": len(CONFIGURED_NODES),
+            "total_nodes": len(CONFIGURED_NODES),
+            "enabled_nodes": len(ENABLED_NODES),
+            "disabled_nodes": len(CONFIGURED_NODES) - len(ENABLED_NODES),
             "driver_count": len(DRIVERS),
         }
     )
@@ -176,7 +199,10 @@ def get_app_health():
             "ok": not degraded,
             "status": "ok" if not degraded else "degraded",
             "time_status": time_status(),
-            "node_count": len(DRIVERS),
+            "node_count": len(CONFIGURED_NODES),
+            "total_nodes": len(CONFIGURED_NODES),
+            "enabled_nodes": len(ENABLED_NODES),
+            "disabled_nodes": len(CONFIGURED_NODES) - len(ENABLED_NODES),
             "driver_count": len(DRIVERS),
             "latest_readings": readings,
         }
