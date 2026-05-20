@@ -107,9 +107,75 @@ def time_status() -> Dict[str, Any]:
     }
 
 
+def disabled_reading(node: Dict[str, Any]) -> Dict[str, Any]:
+    uid = node.get("uid", "unknown")
+    return {
+        "uid": uid,
+        "timestamp": None,
+        "status": "disabled",
+        "data": {
+            "temp_c": None,
+            "door_open": None,
+            "door_alarm": False,
+            "temp_alarm": False,
+        },
+        "extended": {
+            "uid": uid,
+            "name": node.get("name", uid),
+            "location": node.get("location"),
+            "instance": node.get("instance"),
+            "enabled": False,
+            "host": node.get("host"),
+            "port": node.get("port"),
+            "min_temp_c": node.get("min_temp_c"),
+            "max_temp_c": node.get("max_temp_c"),
+            "node_reachable": None,
+            "error": "disabled",
+        },
+        "raw": None,
+    }
+
+
 def latest_readings() -> List[Dict[str, Any]]:
     readings = []
-    for driver in DRIVERS:
+    drivers_by_uid = {driver.uid: driver for driver in DRIVERS}
+
+    for node in CONFIGURED_NODES:
+        if not node.get("enabled", True):
+            readings.append(disabled_reading(node))
+            continue
+
+        uid = node.get("uid", "unknown")
+        driver = drivers_by_uid.get(uid)
+        if driver is None:
+            readings.append(
+                {
+                    "uid": uid,
+                    "timestamp": utc_now().strftime("%Y-%m-%dT%H:%M:%SZ"),
+                    "status": "error",
+                    "data": {
+                        "temp_c": None,
+                        "door_open": None,
+                        "door_alarm": None,
+                        "temp_alarm": None,
+                    },
+                    "extended": {
+                        "uid": uid,
+                        "name": node.get("name", uid),
+                        "location": node.get("location"),
+                        "instance": node.get("instance"),
+                        "enabled": True,
+                        "host": node.get("host"),
+                        "port": node.get("port"),
+                        "min_temp_c": node.get("min_temp_c"),
+                        "max_temp_c": node.get("max_temp_c"),
+                        "error": "driver_missing",
+                    },
+                    "raw": None,
+                }
+            )
+            continue
+
         try:
             readings.append(driver.get_reading())
         except Exception as exc:
